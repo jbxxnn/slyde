@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppUrl } from "@/lib/env";
-import { exchangeCodeForToken, fetchInstagramAccounts } from "@/lib/meta";
+import {
+  exchangeCodeForToken,
+  exchangeForLongLivedInstagramToken,
+  fetchInstagramAccount,
+} from "@/lib/meta";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -46,55 +50,44 @@ export async function GET(request: Request) {
   }
 
   try {
-    const token = await exchangeCodeForToken(code);
-    const accounts = await fetchInstagramAccounts(token.access_token);
-    const connected = accounts.data?.filter((account) => account.instagram_business_account) ?? [];
+    const shortLivedToken = await exchangeCodeForToken(code);
+    const longLivedToken = await exchangeForLongLivedInstagramToken(shortLivedToken.access_token);
+    const instagram = await fetchInstagramAccount(longLivedToken.access_token);
+    const igUserId = instagram.user_id ?? instagram.id;
 
-    for (const account of connected) {
-      const instagram = account.instagram_business_account;
-
-      if (!instagram) {
-        continue;
-      }
-
-      const { data: savedAccount, error: accountError } = await admin
-        .from("instagram_accounts")
-        .upsert(
-          {
-            workspace_id: oauthState.workspace_id,
-            ig_user_id: instagram.id,
-            username: instagram.username,
-            page_id: account.id,
-            page_name: account.name,
-            status: "connected",
-          },
-          { onConflict: "workspace_id,ig_user_id" },
-        )
-        .select("id")
-        .single();
-
-      if (accountError || !savedAccount) {
-        throw new Error(accountError?.message ?? "Could not save Instagram account.");
-      }
-
-      await admin.from("instagram_account_tokens").upsert(
+    const { data: savedAccount, error: accountError } = await admin
+      .from("instagram_accounts")
+      .upsert(
         {
-          instagram_account_id: savedAccount.id,
-          access_token: account.access_token ?? token.access_token,
-          token_type: token.token_type ?? "bearer",
-          expires_at: token.expires_in
-            ? new Date(Date.now() + token.expires_in * 1000).toISOString()
-            : null,
+          workspace_id: oauthState.workspace_id,
+          ig_user_id: igUserId,
+          username: instagram.username,
+          page_id: null,
+          page_name: instagram.account_type ?? "Instagram professional account",
+          status: "connected",
         },
-        { onConflict: "instagram_account_id" },
-      );
+        { onConflict: "workspace_id,ig_user_id" },
+      )
+      .select("id")
+      .single();
+
+    if (accountError || !savedAccount) {
+      throw new Error(accountError?.message ?? "Could not save Instagram account.");
     }
+
+    await admin.from("instagram_account_tokens").upsert(
+      {
+        instagram_account_id: savedAccount.id,
+        access_token: longLivedToken.access_token,
+        token_type: longLivedToken.token_type ?? "bearer",
+        expires_at: longLivedToken.expires_in
+          ? new Date(Date.now() + longLivedToken.expires_in * 1000).toISOString()
+          : null,
+      },
+      { onConflict: "instagram_account_id" },
+    );
 
     await supabase.from("oauth_states").delete().eq("id", oauthState.id);
-
-    if (!connected.length) {
-      return NextResponse.redirect(`${getAppUrl()}/dashboard/connect?error=no-instagram-business-account`);
-    }
 
     return NextResponse.redirect(`${getAppUrl()}/dashboard/connect?connected=1`);
   } catch (caught) {

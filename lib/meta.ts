@@ -2,12 +2,9 @@ import crypto from "crypto";
 import { getAppUrl, getEnv } from "@/lib/env";
 
 const DEFAULT_SCOPES = [
-  "instagram_basic",
-  "instagram_manage_comments",
-  "instagram_manage_messages",
-  "pages_show_list",
-  "pages_read_engagement",
-  "pages_manage_metadata",
+  "instagram_business_basic",
+  "instagram_business_manage_comments",
+  "instagram_business_manage_messages",
 ];
 
 export function getMetaApiVersion() {
@@ -25,7 +22,7 @@ export function buildMetaLoginUrl(state: string) {
     throw new Error("META_APP_ID is not configured.");
   }
 
-  const url = new URL(`https://www.facebook.com/${getMetaApiVersion()}/dialog/oauth`);
+  const url = new URL("https://www.instagram.com/oauth/authorize");
   url.searchParams.set("client_id", appId);
   url.searchParams.set("redirect_uri", getMetaRedirectUri());
   url.searchParams.set("state", state);
@@ -43,45 +40,79 @@ export async function exchangeCodeForToken(code: string) {
     throw new Error("META_APP_ID and META_APP_SECRET must be configured.");
   }
 
-  const url = new URL(`https://graph.facebook.com/${getMetaApiVersion()}/oauth/access_token`);
-  url.searchParams.set("client_id", appId);
-  url.searchParams.set("client_secret", appSecret);
-  url.searchParams.set("redirect_uri", getMetaRedirectUri());
-  url.searchParams.set("code", code);
+  const body = new URLSearchParams();
+  body.set("client_id", appId);
+  body.set("client_secret", appSecret);
+  body.set("grant_type", "authorization_code");
+  body.set("redirect_uri", getMetaRedirectUri());
+  body.set("code", code);
 
-  const response = await fetch(url);
+  const response = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
   const payload = await response.json();
 
   if (!response.ok) {
     throw new Error(payload.error?.message ?? "Failed to exchange Meta code.");
   }
 
-  return payload as { access_token: string; token_type?: string; expires_in?: number };
+  return payload as {
+    access_token: string;
+    user_id?: string | number;
+    permissions?: string[];
+    token_type?: string;
+    expires_in?: number;
+  };
 }
 
-export async function fetchInstagramAccounts(accessToken: string) {
-  const url = new URL(`https://graph.facebook.com/${getMetaApiVersion()}/me/accounts`);
-  url.searchParams.set("fields", "id,name,access_token,instagram_business_account{id,username,profile_picture_url}");
+export async function exchangeForLongLivedInstagramToken(accessToken: string) {
+  const appSecret = process.env.META_APP_SECRET;
+
+  if (!appSecret) {
+    throw new Error("META_APP_SECRET must be configured.");
+  }
+
+  const url = new URL("https://graph.instagram.com/access_token");
+  url.searchParams.set("grant_type", "ig_exchange_token");
+  url.searchParams.set("client_secret", appSecret);
   url.searchParams.set("access_token", accessToken);
 
   const response = await fetch(url);
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to fetch connected Instagram accounts.");
+    throw new Error(payload.error?.message ?? "Failed to exchange Instagram token.");
   }
 
   return payload as {
-    data?: Array<{
-      id: string;
-      name: string;
-      access_token?: string;
-      instagram_business_account?: {
-        id: string;
-        username?: string;
-        profile_picture_url?: string;
-      };
-    }>;
+    access_token: string;
+    token_type?: string;
+    expires_in?: number;
+  };
+}
+
+export async function fetchInstagramAccount(accessToken: string) {
+  const url = new URL(`https://graph.instagram.com/${getMetaApiVersion()}/me`);
+  url.searchParams.set("fields", "id,user_id,username,profile_picture_url,account_type");
+  url.searchParams.set("access_token", accessToken);
+
+  const response = await fetch(url);
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(payload.error?.message ?? "Failed to fetch connected Instagram account.");
+  }
+
+  return payload as {
+    id: string;
+    user_id?: string;
+    username?: string;
+    profile_picture_url?: string;
+    account_type?: string;
   };
 }
 
@@ -108,7 +139,7 @@ export async function sendInstagramTextMessage(params: {
   accessToken: string;
 }) {
   const response = await fetch(
-    `https://graph.facebook.com/${getMetaApiVersion()}/${params.igUserId}/messages`,
+    `https://graph.instagram.com/${getMetaApiVersion()}/${params.igUserId}/messages`,
     {
       method: "POST",
       headers: {
@@ -138,7 +169,7 @@ export async function sendInstagramPrivateReply(params: {
   accessToken: string;
 }) {
   const response = await fetch(
-    `https://graph.facebook.com/${getMetaApiVersion()}/${params.igUserId}/messages`,
+    `https://graph.instagram.com/${getMetaApiVersion()}/${params.igUserId}/messages`,
     {
       method: "POST",
       headers: {

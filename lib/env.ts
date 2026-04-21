@@ -3,7 +3,11 @@ export function getEnv(name: string, fallback = "") {
 }
 
 export function getAppUrl() {
-  return getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000").replace(/\/$/, "");
+  const configuredUrl = getEnv("NEXT_PUBLIC_APP_URL");
+  const vercelUrl = getEnv("VERCEL_URL");
+  const fallbackUrl = vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
+
+  return (configuredUrl || fallbackUrl).replace(/\/$/, "");
 }
 
 export function hasSupabaseEnv() {

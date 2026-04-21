@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, MessageCircle, ShieldCheck, Zap } from "lucide-react";
 
 const features = [
@@ -19,7 +20,18 @@ const features = [
   },
 ];
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string; next?: string }>;
+}) {
+  const params = await searchParams;
+
+  if (params.code) {
+    const next = params.next ?? "/dashboard";
+    redirect(`/auth/callback?code=${encodeURIComponent(params.code)}&next=${encodeURIComponent(next)}`);
+  }
+
   return (
     <main className="min-h-screen">
       <section className="mx-auto flex min-h-[92vh] max-w-6xl flex-col justify-between px-5 py-6 sm:px-8 lg:px-10">

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getAppUrl } from "@/lib/env";
 
@@ -12,10 +13,12 @@ export async function signInWithEmail(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const headerStore = await headers();
+  const origin = headerStore.get("origin") ?? getAppUrl();
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${getAppUrl()}/auth/callback?next=/dashboard`,
+      emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
     },
   });
 

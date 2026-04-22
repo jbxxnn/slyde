@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { FlaskConical } from "lucide-react";
-import { runDmSimulation } from "./actions";
+import { FlaskConical, MessageSquareText } from "lucide-react";
+import { runCommentApiTest, runDmSimulation } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,13 @@ export default async function TestPage({
           <button className="inline-flex items-center gap-2 rounded-md bg-moss px-4 py-3 text-sm font-semibold text-white">
             <FlaskConical size={17} aria-hidden />
             Simulate guide DM
+          </button>
+        </form>
+
+        <form action={runCommentApiTest} className="mt-3">
+          <button className="inline-flex items-center gap-2 rounded-md border border-ink/15 px-4 py-3 text-sm font-semibold text-ink">
+            <MessageSquareText size={17} aria-hidden />
+            Test comments API
           </button>
         </form>
 

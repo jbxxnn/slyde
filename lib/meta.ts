@@ -118,6 +118,76 @@ export async function fetchInstagramAccount(accessToken: string) {
   };
 }
 
+export async function fetchInstagramMedia(params: { igUserId: string; accessToken: string }) {
+  const url = new URL(`https://graph.instagram.com/${getMetaApiVersion()}/${params.igUserId}/media`);
+  url.searchParams.set("fields", "id,caption,comments_count,media_type,permalink,timestamp");
+  url.searchParams.set("access_token", params.accessToken);
+
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(formatMetaError(payload, "Failed to fetch Instagram media."));
+  }
+
+  return payload as {
+    data?: Array<{
+      id: string;
+      caption?: string;
+      comments_count?: number;
+      media_type?: string;
+      permalink?: string;
+      timestamp?: string;
+    }>;
+  };
+}
+
+export async function fetchInstagramComments(params: { mediaId: string; accessToken: string }) {
+  const url = new URL(`https://graph.instagram.com/${getMetaApiVersion()}/${params.mediaId}/comments`);
+  url.searchParams.set("fields", "id,text,username,timestamp");
+  url.searchParams.set("access_token", params.accessToken);
+
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(formatMetaError(payload, "Failed to fetch Instagram comments."));
+  }
+
+  return payload as {
+    data?: Array<{
+      id: string;
+      text?: string;
+      username?: string;
+      timestamp?: string;
+    }>;
+  };
+}
+
+export async function fetchInstagramCommentTest(params: { igUserId: string; accessToken: string }) {
+  const media = await fetchInstagramMedia(params);
+  const firstMedia = media.data?.[0];
+
+  if (!firstMedia) {
+    return {
+      status: "no_media",
+      media,
+      message: "Connected Instagram account has no media returned by the API.",
+    };
+  }
+
+  const comments = await fetchInstagramComments({
+    mediaId: firstMedia.id,
+    accessToken: params.accessToken,
+  });
+
+  return {
+    status: "ok",
+    media: firstMedia,
+    comments,
+  };
+}
+
 export function verifyMetaSignature(rawBody: string, signature: string | null) {
   const appSecret = process.env.META_APP_SECRET;
 

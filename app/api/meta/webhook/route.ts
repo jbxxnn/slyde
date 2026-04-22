@@ -19,16 +19,32 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const rawBody = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
+  const admin = createAdminClient();
 
   if (process.env.META_APP_SECRET && !verifyMetaSignature(rawBody, signature)) {
+    if (admin) {
+      await admin.from("webhook_events").insert({
+        provider: "meta",
+        event_type: "invalid_signature",
+        payload: {
+          reason: "x-hub-signature-256 missing or invalid",
+          signature_present: Boolean(signature),
+          raw_body_preview: rawBody.slice(0, 2000),
+        },
+      });
+    }
+
     return new Response("Invalid signature", { status: 401 });
   }
 
-  const admin = createAdminClient();
   const payload = JSON.parse(rawBody);
 
   if (admin) {
+    const linkedAccount = await findLinkedAccountForPayload(payload);
+
     await admin.from("webhook_events").insert({
+      workspace_id: linkedAccount?.workspace_id,
+      instagram_account_id: linkedAccount?.id,
       provider: "meta",
       event_type: payload.object ?? "instagram",
       payload,
@@ -39,6 +55,41 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ received: true });
+}
+
+async function findLinkedAccountForPayload(payload: any) {
+  const admin = createAdminClient();
+
+  if (!admin) {
+    return null;
+  }
+
+  const entryIds = (payload.entry ?? [])
+    .map((entry: any) => String(entry.id ?? ""))
+    .filter(Boolean);
+
+  if (entryIds.length) {
+    const { data: account } = await admin
+      .from("instagram_accounts")
+      .select("id, workspace_id, ig_user_id")
+      .in("ig_user_id", entryIds)
+      .limit(1)
+      .maybeSingle();
+
+    if (account) {
+      return account;
+    }
+  }
+
+  const { data: fallbackAccount } = await admin
+    .from("instagram_accounts")
+    .select("id, workspace_id, ig_user_id")
+    .eq("status", "connected")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return fallbackAccount ?? null;
 }
 
 function extractAutomationEvents(payload: any): AutomationEvent[] {

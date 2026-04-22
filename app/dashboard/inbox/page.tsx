@@ -1,5 +1,6 @@
 import { Inbox } from "lucide-react";
 import { getWorkspaceContext } from "@/lib/dashboard";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,18 @@ export default async function InboxPage() {
     return null;
   }
 
-  const { data: events } = await context.supabase
+  const admin = createAdminClient();
+  const { data: events } = admin
+    ? await admin
+        .from("webhook_events")
+        .select("id, event_type, created_at, payload, workspace_id")
+        .order("created_at", { ascending: false })
+        .limit(25)
+    : await context.supabase
     .from("webhook_events")
-    .select("id, event_type, created_at, payload")
+    .select("id, event_type, created_at, payload, workspace_id")
     .order("created_at", { ascending: false })
-    .limit(15);
+    .limit(25);
 
   return (
     <div>
@@ -33,7 +41,16 @@ export default async function InboxPage() {
             <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft" key={event.id}>
               <div className="flex flex-col justify-between gap-2 sm:flex-row">
                 <h2 className="font-semibold text-ink">{event.event_type}</h2>
-                <time className="text-sm text-ink/55">{new Date(event.created_at).toLocaleString()}</time>
+                <div className="flex items-center gap-3">
+                  {!event.workspace_id ? (
+                    <span className="rounded-md bg-amber/10 px-2 py-1 text-xs font-semibold text-amber">
+                      unmatched
+                    </span>
+                  ) : null}
+                  <time className="text-sm text-ink/55">
+                    {new Date(event.created_at).toLocaleString()}
+                  </time>
+                </div>
               </div>
               <pre className="mt-4 max-h-52 overflow-auto rounded-md bg-ink p-4 text-xs leading-6 text-white">
                 {JSON.stringify(event.payload, null, 2)}

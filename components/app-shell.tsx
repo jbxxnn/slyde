@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { Bot, Cable, LayoutDashboard, ListChecks, LogOut, MessageSquareText } from "lucide-react";
+import {
+  Bot,
+  Cable,
+  FlaskConical,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  MessageSquareText,
+} from "lucide-react";
 import { signOut } from "@/app/login/actions";
 
 const nav = [
@@ -7,6 +15,7 @@ const nav = [
   { href: "/dashboard/rules", label: "Rules", icon: ListChecks },
   { href: "/dashboard/inbox", label: "Inbox", icon: MessageSquareText },
   { href: "/dashboard/connect", label: "Instagram", icon: Cable },
+  { href: "/dashboard/test", label: "Test", icon: FlaskConical },
 ];
 
 export function AppShell({

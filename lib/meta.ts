@@ -59,7 +59,7 @@ export async function exchangeCodeForToken(code: string) {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to exchange Meta code.");
+    throw new Error(formatMetaError(payload, "Failed to exchange Instagram code."));
   }
 
   return payload as {
@@ -87,7 +87,7 @@ export async function exchangeForLongLivedInstagramToken(accessToken: string) {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to exchange Instagram token.");
+    throw new Error(formatMetaError(payload, "Failed to exchange Instagram token."));
   }
 
   return payload as {
@@ -106,7 +106,7 @@ export async function fetchInstagramAccount(accessToken: string) {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to fetch connected Instagram account.");
+    throw new Error(formatMetaError(payload, "Failed to fetch connected Instagram account."));
   }
 
   return payload as {
@@ -158,7 +158,7 @@ export async function sendInstagramTextMessage(params: {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to send Instagram message.");
+    throw new Error(formatMetaError(payload, "Failed to send Instagram message."));
   }
 
   return payload;
@@ -188,8 +188,26 @@ export async function sendInstagramPrivateReply(params: {
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? "Failed to send Instagram private reply.");
+    throw new Error(formatMetaError(payload, "Failed to send Instagram private reply."));
   }
 
   return payload;
+}
+
+function formatMetaError(payload: any, fallback: string) {
+  const error = payload?.error;
+
+  if (!error) {
+    return fallback;
+  }
+
+  return [
+    error.message ?? fallback,
+    error.type ? `type=${error.type}` : null,
+    error.code ? `code=${error.code}` : null,
+    error.error_subcode ? `subcode=${error.error_subcode}` : null,
+    error.fbtrace_id ? `trace=${error.fbtrace_id}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }

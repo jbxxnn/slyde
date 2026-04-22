@@ -51,8 +51,20 @@ export async function GET(request: Request) {
 
   try {
     const shortLivedToken = await exchangeCodeForToken(code);
-    const longLivedToken = await exchangeForLongLivedInstagramToken(shortLivedToken.access_token);
-    const instagram = await fetchInstagramAccount(longLivedToken.access_token);
+    let accessToken = shortLivedToken.access_token;
+    let tokenType = shortLivedToken.token_type ?? "bearer";
+    let expiresIn = shortLivedToken.expires_in;
+
+    try {
+      const longLivedToken = await exchangeForLongLivedInstagramToken(shortLivedToken.access_token);
+      accessToken = longLivedToken.access_token;
+      tokenType = longLivedToken.token_type ?? tokenType;
+      expiresIn = longLivedToken.expires_in ?? expiresIn;
+    } catch {
+      // Keep the short-lived token during setup so we can verify OAuth/account linking first.
+    }
+
+    const instagram = await fetchInstagramAccount(accessToken);
     const igUserId = instagram.user_id ?? instagram.id;
 
     const { data: savedAccount, error: accountError } = await admin
@@ -78,10 +90,10 @@ export async function GET(request: Request) {
     await admin.from("instagram_account_tokens").upsert(
       {
         instagram_account_id: savedAccount.id,
-        access_token: longLivedToken.access_token,
-        token_type: longLivedToken.token_type ?? "bearer",
-        expires_at: longLivedToken.expires_in
-          ? new Date(Date.now() + longLivedToken.expires_in * 1000).toISOString()
+        access_token: accessToken,
+        token_type: tokenType,
+        expires_at: expiresIn
+          ? new Date(Date.now() + expiresIn * 1000).toISOString()
           : null,
       },
       { onConflict: "instagram_account_id" },
